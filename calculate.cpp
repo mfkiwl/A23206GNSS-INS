@@ -9,7 +9,7 @@
 
 using namespace std;
 using namespace Eigen;
-
+//该函数计算计算值与真值的误差
 void Calculate_errors_NED(
     double est_L_b, double est_lambda_b, double est_h_b,
     Vector3d est_v_eb_n, Matrix3d est_C_b_n,
@@ -37,7 +37,7 @@ void Calculate_errors_NED(
     Matrix3d delta_C_b_n = est_C_b_n * true_C_b_n.transpose();
     delta_eul_nb_n = -CTM_to_Euler(delta_C_b_n);
 }
-
+//该矩阵将坐标转换矩阵转化为欧拉角
 Vector3d CTM_to_Euler(Matrix3d C)
 {
     Vector3d eul;
@@ -58,6 +58,7 @@ Vector3d CTM_to_Euler(Matrix3d C)
     return eul;
 }
 
+//该函数将结果从e系投影n系
 void ECEF_to_NED(Vector3d r_eb_e, Vector3d v_eb_e, Matrix3d C_b_e, double& L_b, double& lambda_b, double& h_b, Vector3d& v_eb_n, Matrix3d& C_b_n)
 {
 
@@ -87,8 +88,6 @@ void ECEF_to_NED(Vector3d r_eb_e, Vector3d v_eb_e, Matrix3d C_b_e, double& L_b, 
 
     double T = sqrt(G * G + (F - V * G) / (2.0 * G - E)) - G;
 
-    // copysign()函数接受两个参数，并返回一个值，该值具有第一个参数的大小和第二个参数的符号
-    // 能否确定值的范围？
     // double fabs(double x)，求绝对值
     L_b = copysign(atan((1.0 - T * T) / (2.0 * T * sqrt(1.0 - e * e))), r_eb_e(2));
 
@@ -109,6 +108,7 @@ void ECEF_to_NED(Vector3d r_eb_e, Vector3d v_eb_e, Matrix3d C_b_e, double& L_b, 
     C_b_n = C_e_n * C_b_e;
 }
 
+//该函数将欧拉角转化为方向余弦矩阵
 Matrix3d Euler_to_CTM(Vector3d eul)
 {
 
@@ -137,7 +137,7 @@ Matrix3d Euler_to_CTM(Vector3d eul)
 
     return C;
 }
-
+//计算当地重力
 Vector3d Gravity_ECEF(Vector3d r_eb_e)
 {
 
@@ -169,7 +169,7 @@ Vector3d Gravity_ECEF(Vector3d r_eb_e)
 
     return g;
 }
-
+//惯性导航力学编排
 void Nav_equations_ECEF(const double tor_i,
     const Vector3d& old_r_eb_e,
     const Vector3d& old_v_eb_e,
@@ -190,19 +190,13 @@ void Nav_equations_ECEF(const double tor_i,
     C_Earth << cos(alpha_ie), sin(alpha_ie), 0,
         -sin(alpha_ie), cos(alpha_ie), 0,
         0, 0, 1;
-    //cout << "C_Earth " << endl;
-    //cout << setprecision(15) << C_Earth << endl;
+
 
     Vector3d alpha_ib_b = omega_ib_b * tor_i;
     double mag_alpha = sqrt(alpha_ib_b.transpose() * alpha_ib_b);
     Matrix3d Alpha_ib_b = Skew_symmetric(alpha_ib_b);
 
-    //cout << "alpha_ib_b " << endl;
-    //cout << setprecision(15) << alpha_ib_b << endl;
-    //cout << "mag_alpha " << endl;
-    //cout << setprecision(15) << mag_alpha << endl;
-    //cout << "Alpha_ib_b " << endl;
-    //cout << setprecision(15) << Alpha_ib_b << endl;
+
 
     Matrix3d C_new_old;
     if (mag_alpha > 1.E-8)
@@ -216,8 +210,7 @@ void Nav_equations_ECEF(const double tor_i,
 
     // Update attitude
     C_b_e = C_Earth * old_C_b_e * C_new_old;
-    //cout << "C_new_old "<< endl;
-    //cout << setprecision(15) << C_new_old <<endl;
+
 
     // SPECIFIC FORCE FRAME TRANSFORMATION
     Matrix3d ave_C_b_e;
@@ -232,10 +225,7 @@ void Nav_equations_ECEF(const double tor_i,
 
     // Transform specific force to ECEF-frame resolving axes
     Vector3d f_ib_e = ave_C_b_e * f_ib_b;
-    //cout << "ave_C_b_e "<< endl;
-    //cout<< ave_C_b_e <<endl;
-    //cout << "f_ib_e "<< endl;
-    //cout<< f_ib_e <<endl;
+
 
     // UPDATE VELOCITY
     v_eb_e = old_v_eb_e + tor_i * (f_ib_e + Gravity_ECEF(old_r_eb_e) - 2.0 * Skew_symmetric(Vector3d(0, 0, omega_ie)) * old_v_eb_e);
@@ -244,6 +234,7 @@ void Nav_equations_ECEF(const double tor_i,
     r_eb_e = old_r_eb_e + (v_eb_e + old_v_eb_e) * 0.5 * tor_i;
 }
 
+//将结果从n系投影到e系
 void NED_to_ECEF(Vector3d& r_eb_e, Vector3d& v_eb_e, Matrix3d& C_b_e, double L_b,
     double lambda_b, double h_b, Vector3d v_eb_n, Matrix3d C_b_n)
 {
@@ -277,6 +268,7 @@ void NED_to_ECEF(Vector3d& r_eb_e, Vector3d& v_eb_e, Matrix3d& C_b_e, double L_b
     C_b_e = C_e_n.transpose() * C_b_n;
 }
 
+//该函数计算子午圈、卯酉圈半径
 void Radii_of_curvature(double L, double& R_N, double& R_E)
 {
 
@@ -293,7 +285,7 @@ void Radii_of_curvature(double L, double& R_N, double& R_E)
     // Calculate transverse radius of curvature using (2.105)
     R_E = R_0 / sqrt(temp);
 }
-
+//该函数求反对称矩阵
 Matrix3d Skew_symmetric(Vector3d a)
 {
     Matrix3d A;
@@ -305,6 +297,7 @@ Matrix3d Skew_symmetric(Vector3d a)
     return A;
 }
 
+//初始化est_C_b_n矩阵（真值矩阵乘以误差矩阵）
 Matrix3d Initialize_NED_attitude(Matrix3d C_b_n, Vector3d delta_eul_nb_n)
 {
     Matrix3d delta_C_b_n = Euler_to_CTM(-delta_eul_nb_n);

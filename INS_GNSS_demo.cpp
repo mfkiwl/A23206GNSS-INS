@@ -14,13 +14,13 @@ const double micro_g_to_meters_per_second_squared = 9.80665E-6;
 
 int main()
 {
-	string input_profile_name = "truth.nav";
+	string input_profile_name = "truth.nav";//真值
 	//string input_profile_name = "truth1.nav";
 
-	string input_profile_name1 = "ADIS16465.txt";
+	string input_profile_name1 = "ADIS16465.txt";//IMU输出
 	//string input_profile_name1 = "ADIS.txt";
 
-	 string input_profile_name2 = "GNSS_RTK.pos";
+	 string input_profile_name2 = "GNSS_RTK.pos";//高精度RTK数据
 	//string input_profile_name2 = "GNSS_RTK1.pos";
 
 	string output_profile_name = "INS_GNSS_Demo_3_Profile.csv";
@@ -34,21 +34,24 @@ int main()
 	IMU_errors imu_errors = {};
 	imu_errors.b_a = Vector3d(600 * micro_g_to_meters_per_second_squared, 600 * micro_g_to_meters_per_second_squared, 600 * micro_g_to_meters_per_second_squared);
 	imu_errors.b_g = Vector3d(75 * deg_to_rad / 3600, 75 * deg_to_rad / 3600, 75 * deg_to_rad / 3600);
+	//零偏误差
 	imu_errors.M_a << 500E-6, -300E-6, 200E-6,
 		-150E-6, -600E-6, 250E-6,
 		-250E-6, 100E-6, 450E-6;
 	imu_errors.M_g << 400E-6, -300E-6, 250E-6,
 		0, -300E-6, -150E-6,
 		0, 0, -350E-6;
+	//比例因子误差
 	imu_errors.G_g << 0.9 * deg_to_rad / (3600 * 9.80665), -1.1 * deg_to_rad / (3600 * 9.80665), -0.6 * deg_to_rad / (3600 * 9.80665),
 		-0.5 * deg_to_rad / (3600 * 9.80665), 1.9 * deg_to_rad / (3600 * 9.80665), -1.6 * deg_to_rad / (3600 * 9.80665),
 		0.3 * deg_to_rad / (3600 * 9.80665), 1.1 * deg_to_rad / (3600 * 9.80665), -1.3 * deg_to_rad / (3600 * 9.80665);
-	imu_errors.accel_noise_root_PSD = 100 * micro_g_to_meters_per_second_squared;
-	imu_errors.gyro_noise_root_PSD = 0.01 * deg_to_rad / 60;
+	//交轴耦合误差误差
+	imu_errors.accel_noise_root_PSD = 100 * micro_g_to_meters_per_second_squared;//加速度计随机噪声
+	imu_errors.gyro_noise_root_PSD = 0.01 * deg_to_rad / 60;//陀螺仪随机噪声
 	imu_errors.accel_quant_level = 1E-2;
 	imu_errors.gyro_quant_level = 2E-4;
 
-	// GNSS configuration
+	// GNSS configuration GNSS相关参数
 	GNSS_config gnss_config = {};
 	gnss_config.epoch_interval = 1;
 	gnss_config.init_est_r_ea_e = Vector3d(0, 0, 0);
@@ -66,7 +69,7 @@ int main()
 	gnss_config.rx_clock_offset = 10000;
 	gnss_config.rx_clock_drift = 100;
 
-	// Kalman filter configuration
+	// Kalman filter configuration 卡尔曼滤波器配置
 	LC_KF_config kf_config = {};
 	kf_config.init_att_unc = deg_to_rad;
 	kf_config.init_vel_unc = 0.1;
@@ -83,10 +86,10 @@ int main()
 	// Profile data
 	int no_epochs, no_epochs1, no_epochs2;//Read_profile中进行初始化
 	MatrixXd in_profile, in_profile1, in_profile2;
-	in_profile.resize(1, 11);
-	in_profile1.resize(1, 7);
-	in_profile2.resize(1, 7);
-	in_profile.setZero();
+	in_profile.resize(1, 11);//2 时间 3-4 经纬高 6-8 速度 9-11 姿态
+	in_profile1.resize(1, 7);//1时间 2—4角度增量 5—7加速度
+	in_profile2.resize(1, 7);//1时间 2-4经纬高 5-7速度
+	in_profile.setZero();//初始化
 	in_profile1.setZero();
 	in_profile2.setZero();
 
@@ -97,10 +100,7 @@ int main()
 	{
 		cout << "Error reading the input profile." << endl;
 		return 1;
-	}//325017 324222 1616
-	//cout << "in_profile1 " << endl;
-	//cout << setprecision(15) << in_profile1.row(324220) << endl;
-	//cout << setprecision(15) << in_profile1.row(324221) << endl;
+	}
 
 	// Output data
 	MatrixXd out_profile1, out_errors, out_IMU_bias_est, out_clock, out_KF_SD;
@@ -114,7 +114,6 @@ int main()
 
 	ofstream fout("out_profile1.txt", ios::binary);
 	fout << setprecision(15) << out_profile1 << endl;
-	fout.flush();
-
+	fout.flush(); //创建文件out_profile1.txt
 	return 0;
 }

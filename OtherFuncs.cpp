@@ -11,7 +11,7 @@
 using namespace std;
 using namespace Eigen;
 
-VectorXd generateRandomVector()
+VectorXd generateRandomVector()//生成一个包含6个元素的随机向量
 {
 	unsigned seed = chrono::system_clock::now().time_since_epoch().count();
 	default_random_engine gen(seed);
@@ -26,7 +26,7 @@ VectorXd generateRandomVector()
 
 	return random_vector;
 }
-
+//仿真IMU输出，在真值的基础上加上误差
 void IMU_model(double tor_i, Eigen::Vector3d true_f_ib_b, Eigen::Vector3d true_omega_ib_b, IMU_errors IMU_errors, Eigen::Matrix<double, 6, 1>& old_quant_residuals, Eigen::Vector3d& meas_f_ib_b, Eigen::Vector3d& meas_omega_ib_b, Eigen::Matrix<double, 6, 1>& quant_residuals)
 {
 	Vector3d accel_noise(0.0, 0.0, 0.0);
@@ -34,16 +34,13 @@ void IMU_model(double tor_i, Eigen::Vector3d true_f_ib_b, Eigen::Vector3d true_o
 
 	VectorXd random_vector = generateRandomVector();
 
-	Vector3d accel_distribution_samples(0.0, 0.0, 0.0);
+	Vector3d accel_distribution_samples(0.0, 0.0, 0.0);//加速度计噪声
 	accel_distribution_samples = random_vector.segment(0, 3);
-	//accel_distribution_samples << 0.154391271801951, 0.325876736354160, -0.355654503308562;
+
 
 	Vector3d gyro_distribution_samples(0.0, 0.0, 0.0);
-	gyro_distribution_samples = random_vector.segment(3, 3);
-	//gyro_distribution_samples << -0.586295008994886, 1.224761441269211, -0.444573554832088;
+	gyro_distribution_samples = random_vector.segment(3, 3);//陀螺仪噪声
 
-	// cout << accel_distribution_samples << endl;
-	// cout << gyro_distribution_samples << endl;
 
 	// 输入的时间间隔 tor_i 大于0时，生成加速度计和陀螺仪的噪声项。
 	if (tor_i > 0)
@@ -51,9 +48,8 @@ void IMU_model(double tor_i, Eigen::Vector3d true_f_ib_b, Eigen::Vector3d true_o
 		// 加速度计噪声存储在 accel_noise 中，陀螺仪噪声存储在 gyro_noise 中。
 		accel_noise = accel_distribution_samples * IMU_errors.accel_noise_root_PSD / sqrt(tor_i);
 		gyro_noise = gyro_distribution_samples * IMU_errors.gyro_noise_root_PSD / sqrt(tor_i);
-
-		// cout << accel_noise << endl;
-		// cout << gyro_noise << endl;
+		//模拟随机噪声Wa=random*PSD/sqrt（T）
+	
 	}
 	else
 	{
@@ -63,39 +59,32 @@ void IMU_model(double tor_i, Eigen::Vector3d true_f_ib_b, Eigen::Vector3d true_o
 	}
 
 	Vector3d uq_f_ib_b = IMU_errors.b_a + (Matrix3d::Identity() + IMU_errors.M_a) * true_f_ib_b + accel_noise;
-	// cout << "uq_f_ib_b" << endl;
-	// cout << uq_f_ib_b << endl;
-	 //cout << "true_f_ib_b" << endl;
-	 //cout << true_f_ib_b << endl;
-	 //cout << "accel_noise" << endl;
-	 //cout << accel_noise << endl;
+
 
 
 	Vector3d uq_omega_ib_b = IMU_errors.b_g + (Matrix3d::Identity() + IMU_errors.M_g) * true_omega_ib_b +
 		IMU_errors.G_g * true_f_ib_b + gyro_noise;
-	// cout << "uq_omega_ib_b" << endl;
-	// cout << uq_omega_ib_b << endl;
+
 
 	// 对加速度计和陀螺仪的输出进行量化处理。
 	if (IMU_errors.accel_quant_level > 0)
 	{
 		Vector3d temp_residuals(0.0, 0.0, 0.0);
 		Vector3d rounded_residuals(0.0, 0.0, 0.0);
-		// double round(double x);四舍五入浮点数到最接近的整数值
+		
 
-		/*cout << uq_f_ib_b << endl;*/
 		temp_residuals = (uq_f_ib_b + old_quant_residuals.segment(0, 3)) / IMU_errors.accel_quant_level;
-		/*cout << temp_residuals << endl;*/
+		
 		for (int i = 0; i < 3; i++)
 		{
 			rounded_residuals(i) = round(temp_residuals(i));
 		}
 
-		//cout<< rounded_residuals <<endl;
+		;
 
 		meas_f_ib_b = IMU_errors.accel_quant_level * rounded_residuals;
 
-		//cout << meas_f_ib_b << endl;
+		
 
 		// segment<Size>(Start) 其中，Size 是切片的大小，Start 是切片的起始位置。
 		// quant_residuals.segment<3>(0)等价于quant_residuals.segment(0, 3)
@@ -114,18 +103,18 @@ void IMU_model(double tor_i, Eigen::Vector3d true_f_ib_b, Eigen::Vector3d true_o
 		Vector3d rounded_residuals(0.0, 0.0, 0.0);
 
 		temp_residuals = (uq_omega_ib_b + old_quant_residuals.segment(3, 3)) / IMU_errors.gyro_quant_level;
-		//cout << temp_residuals << endl;
+	
 
 		for (int i = 0; i < 3; i++)
 		{
 			rounded_residuals(i) = round(temp_residuals(i));
 		}
 
-		//cout << rounded_residuals << endl;
+	
 
 		meas_omega_ib_b = IMU_errors.gyro_quant_level * rounded_residuals;
 
-		//cout << meas_omega_ib_b << endl;
+		
 
 		quant_residuals.segment(3, 3) = uq_omega_ib_b + old_quant_residuals.segment(3, 3) - meas_omega_ib_b;
 	}
@@ -136,14 +125,15 @@ void IMU_model(double tor_i, Eigen::Vector3d true_f_ib_b, Eigen::Vector3d true_o
 	}
 }
 
-Matrix<double, 15, 15> Initialize_LC_P_matrix(const LC_KF_config LC_KF_config)
+
+Matrix<double, 15, 15> Initialize_LC_P_matrix(const LC_KF_config LC_KF_config)//初始化P矩阵
 {
 	Matrix<double, 15, 15> P_matrix = Matrix<double, 15, 15>::Zero();
 
 	// P.block<rows, cols>(i, j)
 	// P.block(i, j, rows, cols)
 	// 从i行j列开始的rows行cols列块
-	//  Initialize error covariance matrix
+	//  Initialize error covariance matrix 初始化P矩阵
 	P_matrix.block<3, 3>(0, 0) = Matrix3d::Identity() * LC_KF_config.init_att_unc * LC_KF_config.init_att_unc;
 	P_matrix.block<3, 3>(3, 3) = Matrix3d::Identity() * LC_KF_config.init_vel_unc * LC_KF_config.init_vel_unc;
 	P_matrix.block<3, 3>(6, 6) = Matrix3d::Identity() * LC_KF_config.init_pos_unc * LC_KF_config.init_pos_unc;
@@ -152,7 +142,7 @@ Matrix<double, 15, 15> Initialize_LC_P_matrix(const LC_KF_config LC_KF_config)
 
 	return P_matrix;
 }
-
+//卡尔曼滤波 ，进行组合导航
 void LC_KF_Epoch(Vector3d GNSS_r_eb_e, Vector3d GNSS_v_eb_e, double tor_s,
 	Matrix3d& est_C_b_e_old, Vector3d& est_v_eb_e_old,
 	Vector3d& est_r_eb_e_old, VectorXd& est_IMU_bias_old,
@@ -173,6 +163,7 @@ void LC_KF_Epoch(Vector3d GNSS_r_eb_e, Vector3d GNSS_v_eb_e, double tor_s,
 
 	// 1. Determine transition matrix using (14.50) (first-order approx)
 	Matrix<double, 15, 15> Phi_matrix = Matrix<double, 15, 15>::Identity();
+	//状态转移矩阵
 	// matrix.block(i,j,p,q) 提取块大小为(p,q),起始于(i,j)
 	Phi_matrix.block(0, 0, 3, 3) -= Omega_ie * tor_s;
 	Phi_matrix.block(0, 12, 3, 3) = est_C_b_e_old * tor_s;
@@ -187,85 +178,59 @@ void LC_KF_Epoch(Vector3d GNSS_r_eb_e, Vector3d GNSS_v_eb_e, double tor_s,
 
 	Phi_matrix.block(3, 9, 3, 3) = est_C_b_e_old * tor_s;
 	Phi_matrix.block(6, 3, 3, 3) = Matrix3d::Identity() * tor_s;
-	// 相同
-	//cout << "Phi_matrix" << endl;
-	//cout << setprecision(15) << Phi_matrix << endl;
 
-	// 2. Determine approximate system noise covariance matrix using (14.82)
 	Matrix<double, 15, 15> Q_prime_matrix = Matrix<double, 15, 15>::Zero();
 	Q_prime_matrix.block(0, 0, 3, 3) = Matrix3d::Identity() * LC_KF_config.gyro_noise_PSD * tor_s;
 	Q_prime_matrix.block(3, 3, 3, 3) = Matrix3d::Identity() * LC_KF_config.accel_noise_PSD * tor_s;
 	Q_prime_matrix.block(9, 9, 3, 3) = Matrix3d::Identity() * LC_KF_config.accel_bias_PSD * tor_s;
 	Q_prime_matrix.block(12, 12, 3, 3) = Matrix3d::Identity() * LC_KF_config.gyro_bias_PSD * tor_s;
-	// 相同
-	//cout << "Q_prime_matrix" << endl;
-	//cout << setprecision(15) << Q_prime_matrix << endl;
-	// 3. Propagate state estimates using (3.14) noting that all states are zero
+	//设置Q矩阵（系统状态方差阵）
 	Matrix<double, 15, 1> x_est_propagated = Matrix<double, 15, 1>::Zero();
 
-	// 4. Propagate state estimation error covariance matrix using (3.46)
+
 	Matrix<double, 15, 15> P_matrix_propagated = Matrix<double, 15, 15>::Zero();
 	P_matrix_propagated = Phi_matrix * (P_matrix_old + 0.5 * Q_prime_matrix) * Phi_matrix.transpose() + 0.5 * Q_prime_matrix;
-	// 相同
-	//cout << "P_matrix_propagated" << endl;
-	//cout << setprecision(15) << P_matrix_propagated.block(0, 0, 15, 3) << endl;
-	//cout << setprecision(15) << P_matrix_propagated.block(0, 3, 15, 3) << endl;
-	//cout << setprecision(15) << P_matrix_propagated.block(0, 6, 15, 3) << endl;
-	//cout << setprecision(15) << P_matrix_propagated.block(0, 9, 15, 3) << endl;
-	//cout << setprecision(15) << P_matrix_propagated.block(0, 12, 15, 3) << endl;
-	// MEASUREMENT UPDATE PHASE
+	//Pk（-）当前时刻P矩阵的预测值  
 
-	// 5. Set-up measurement matrix using (14.115)
 	Matrix<double, 6, 15> H_matrix = MatrixXd::Zero(6, 15);
 	H_matrix.block(0, 6, 3, 3) = -Matrix3d::Identity();
 	H_matrix.block(3, 3, 3, 3) = -Matrix3d::Identity();
-	//cout << "H_matrix" << endl;
-	//cout << setprecision(15) << H_matrix << endl;
-	// 6. Set-up measurement noise covariance matrix assuming all components of GNSS position and velocity are independent and have equal variance.
+	//观测矩阵 Z为相反数需要取负号
+
 	Matrix<double, 6, 6> R_matrix = Matrix<double, 6, 6>::Zero();
 	R_matrix.block(0, 0, 3, 3) = Matrix3d::Identity() * pow(LC_KF_config.pos_meas_SD, 2);
 	R_matrix.block(0, 3, 3, 3) = Matrix3d::Zero();
 	R_matrix.block(3, 0, 3, 3) = Matrix3d::Zero();
 	R_matrix.block(3, 3, 3, 3) = Matrix3d::Identity() * pow(LC_KF_config.vel_meas_SD, 2);
-	// 相同
-	//cout << "R_matrix" << endl;
-	//cout << setprecision(15) << R_matrix << endl;
-	// 7. Calculate Kalman gain using (3.21)
-	// inverse()计算矩阵的逆矩阵
+	//量测噪声方差矩阵
+
 	Matrix<double, 15, 6> K_matrix = Matrix<double, 15, 6>::Zero();
 	K_matrix = P_matrix_propagated * H_matrix.transpose() * (H_matrix * P_matrix_propagated * H_matrix.transpose() + R_matrix).inverse();
-	//cout << "K_matrix" << endl;
-	//cout << setprecision(15) << K_matrix.block(0, 0, 15, 3) << endl;
-	//cout << setprecision(15) << K_matrix.block(0, 3, 15, 3) << endl;
+	//增益矩阵（对权重的计算）
 
-	// 8. Formulate measurement innovations using (14.102), noting that zero
 	VectorXd delta_z(6);
 	delta_z << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
 	delta_z.segment(0, 3) = GNSS_r_eb_e - est_r_eb_e_old;
 	delta_z.segment(3, 3) = GNSS_v_eb_e - est_v_eb_e_old;
-	//cout << "delta_z" << endl;
-	//cout << setprecision(15) << delta_z << endl;
-	// 9. Update state estimates using (3.24)
+	//Z观测向量
+
 	VectorXd x_est_new(15);
 	x_est_new = x_est_propagated + K_matrix * delta_z;
-	//cout << "x_est_new" << endl;
-	//cout << setprecision(15) << x_est_new << endl;
+	//状态向量更新
 
-	// 10. Update state estimation error covariance matrix using (3.25)
 	P_matrix_new = (Matrix<double, 15, 15>::Identity() - K_matrix * H_matrix) * P_matrix_propagated;
-	//cout << "P_matrix_new" << endl;
-	//cout << setprecision(15) << P_matrix_new << endl;
-	// CLOSED-LOOP CORRECTION
+	//当前时刻P矩阵最优估计Pk（+）
 
-	// Correct attitude, velocity, and position using (14.7-9)
 	est_C_b_e_new = (Matrix3d::Identity() - Skew_symmetric(x_est_new.segment(0, 3))) * est_C_b_e_old;
 	est_v_eb_e_new = est_v_eb_e_old - x_est_new.segment(3, 3);
 	est_r_eb_e_new = est_r_eb_e_old - x_est_new.segment(6, 3);
+	//减去误差，更新结果
 
-	// Update IMU bias estimates
+	// Update IMU bias estimates  更新IMU零偏误差
 	est_IMU_bias_new = est_IMU_bias_old + x_est_new.segment(9, 6);
 }
 
+//组合导航，松耦合
 void Loosely_coupled_INS_GNSS(const MatrixXd& in_profile, int no_epochs, const MatrixXd& in_profile1, int no_epochs1,
 	const MatrixXd& in_profile2, int no_epochs2, const InitializationErrors initialization_errors,
 	const IMU_errors IMU_errors, const GNSS_config& gnss_config, const LC_KF_config LC_KF_config,
@@ -273,7 +238,7 @@ void Loosely_coupled_INS_GNSS(const MatrixXd& in_profile, int no_epochs, const M
 	MatrixXd& out_clock, MatrixXd& out_kf_sd)
 {
 
-	// Initialize true navigation solution
+	// Initialize true navigation solution用真值做初始化
 	double old_time = in_profile(0, 1);
 	double true_L_b = in_profile(0, 2);
 	double true_lambda_b = in_profile(0, 3);
@@ -288,38 +253,43 @@ void Loosely_coupled_INS_GNSS(const MatrixXd& in_profile, int no_epochs, const M
 	Matrix3d old_true_C_b_e = Matrix3d::Zero();
 
 	NED_to_ECEF(old_true_r_eb_e, old_true_v_eb_e, old_true_C_b_e, true_L_b, true_lambda_b, true_h_b, true_v_eb_n, true_C_b_n);
+	//导航系转化到地心地固坐标系old_true_r_eb_e, old_true_v_eb_e, old_true_C_b_e
 
-	Vector2d est_clock;
+	Vector2d est_clock;//初始化时间
 	est_clock = Vector2d::Zero();
 
+	//GNSS数据est
 	double old_est_L_b = in_profile2(0, 1);
 	double old_est_lambda_b = in_profile2(0, 2);
 	double old_est_h_b = in_profile2(0, 3);
 	Vector3d old_est_v_eb_n = in_profile2.row(0).segment(4, 3).transpose();
-	//cout << "old_est_v_eb_n" << endl;
-	//cout << old_est_v_eb_n << endl;
-	//cout << in_profile2.row(0) << endl;
+	
 
 	double est_L_b = old_est_L_b;
-
+	
+	//导航系转化到地心地固坐标系
 	Vector3d old_est_r_eb_e(0.0, 0.0, 0.0);
 	Vector3d old_est_v_eb_e(0.0, 0.0, 0.0);
 	Matrix3d C_b_e = Matrix3d::Zero();
 
 	NED_to_ECEF(old_est_r_eb_e, old_est_v_eb_e, C_b_e, old_est_L_b, old_est_lambda_b, old_est_h_b, old_est_v_eb_n, Matrix3d::Zero());
+	
 
 	Matrix3d old_est_C_b_n = Initialize_NED_attitude(true_C_b_n, initialization_errors.delta_eul_nb_n);
+	//真值方向余弦矩阵b系转换为n系，加上初始化偏差等于仿真方向余弦矩阵（无法由GNSS提供）
 
 	Vector3d temp1(0.0, 0.0, 0.0);
 	Vector3d temp2(0.0, 0.0, 0.0);
 	Matrix3d old_est_C_b_e = Matrix3d::Zero();
 	NED_to_ECEF(temp1, temp2, old_est_C_b_e, old_est_L_b, old_est_lambda_b, old_est_h_b, old_est_v_eb_n, old_est_C_b_n);
 
-	// Initialize output profile record and errors record
+	//old_est_r_eb_e, old_est_v_eb_e,old_est_C_b_e
+
+	// Initialize output profile record and errors record   定义输出文件
 	out_profile1 = MatrixXd::Zero(no_epochs1, 10);
 	out_errors = MatrixXd::Zero(no_epochs1, 10);
 
-	// Generate output profile record for the first epoch
+	// Generate output profile record for the first epoch初始化输出文件
 	out_profile1(0, 0) = old_time;
 	out_profile1(0, 1) = old_est_L_b;
 	out_profile1(0, 2) = old_est_lambda_b;
@@ -332,6 +302,7 @@ void Loosely_coupled_INS_GNSS(const MatrixXd& in_profile, int no_epochs, const M
 	Vector3d delta_v_eb_n(0.0, 0.0, 0.0);
 	Vector3d delta_eul_nb_n(0.0, 0.0, 0.0);
 
+	//计算结果与真值的误差
 	Calculate_errors_NED(
 		old_est_L_b, old_est_lambda_b, old_est_h_b,
 		old_est_v_eb_n, old_est_C_b_n,
@@ -346,24 +317,22 @@ void Loosely_coupled_INS_GNSS(const MatrixXd& in_profile, int no_epochs, const M
 
 	// Initialize Kalman filter P matrix and IMU bias states
 	Matrix<double, 15, 15> P_matrix = Initialize_LC_P_matrix(LC_KF_config);
-	//cout << "LC_KF_config" << endl;
-	//cout << LC_KF_config.accel_bias_PSD << endl;
-	//cout << "P_matrix" << endl;
-	//cout << P_matrix << endl;
+
+
 	VectorXd est_IMU_bias = VectorXd::Zero(6);
 
-	// Initialize IMU quantization residuals
+	// Initialize IMU quantization residuals IMU量化残差
 	Matrix<double, 6, 1> quant_residuals;
 	quant_residuals << 0, 0, 0, 0, 0, 0;
 
-	out_imu_bias_est = Matrix<double, 1, 7>::Zero();
+	out_imu_bias_est = Matrix<double, 1, 7>::Zero(); //零偏
 	out_imu_bias_est(0, 0) = old_time;
 	out_imu_bias_est.row(0).segment(1, 6) = est_IMU_bias.transpose();
-	out_clock = Matrix<double, 1, 3>::Zero();
+	out_clock = Matrix<double, 1, 3>::Zero();    //时刻
 	out_clock(0, 0) = old_time;
 	out_clock.row(0).segment(1, 2) = est_clock;
 
-	// Generate KF uncertainty record
+	// Generate KF uncertainty record卡尔曼滤波不确定度
 	out_kf_sd = MatrixXd::Zero(1, 16);
 	out_kf_sd(0, 0) = old_time;
 
@@ -372,14 +341,13 @@ void Loosely_coupled_INS_GNSS(const MatrixXd& in_profile, int no_epochs, const M
 		out_kf_sd(0, i) = sqrt(P_matrix(i - 1, i - 1));
 	}
 
-	//cout << "out_kf_sd" << endl;
-	//cout << out_kf_sd << endl;
+
 
 	// Initialize GNSS model timing
 	double time_last_GNSS = old_time;
 	int GNSS_epoch = 1;
 
-	// Progress bar
+	// Progress bar 进度条
 	string dots = "....................";
 	string bars = "||||||||||||||||||||";
 	string rewind = "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b";
@@ -388,17 +356,20 @@ void Loosely_coupled_INS_GNSS(const MatrixXd& in_profile, int no_epochs, const M
 	int progress_epoch = 0;
 
 	// Main loop
-	for (int epoch = 2; epoch <= no_epochs1; ++epoch)
+	
+	for (int epoch = 2; epoch <= no_epochs1; ++epoch)  //no_epochs1 IMU输出文件响应次数
 	{
 		// Update progress bar
-		if ((epoch - progress_epoch) > (no_epochs1 / 20.0))
+		if ((epoch - progress_epoch) > (no_epochs1 / 20.0)) 
+			//当第一个阶段IMU解算时间超过整个导航时间的1/20时，出现一个进度条，一共有20条
 		{
 			progress_mark++;
 			progress_epoch = epoch;
 			cout << rewind << bars.substr(0, progress_mark) << dots.substr(0, 20 - progress_mark);
 		}
+		
 
-		// Input data from motion profile
+		// Input data from motion profile  读取该时刻的真值
 		true_L_b = in_profile(epoch - 1, 1);
 		true_lambda_b = in_profile(epoch - 1, 2);
 		true_h_b = in_profile(epoch - 1, 3);
@@ -410,58 +381,32 @@ void Loosely_coupled_INS_GNSS(const MatrixXd& in_profile, int no_epochs, const M
 		Matrix3d true_C_b_e = Matrix3d::Identity();
 		NED_to_ECEF(true_r_eb_e, true_v_eb_e, true_C_b_e, true_L_b, true_lambda_b, true_h_b, true_v_eb_n, true_C_b_n);
 
-
-		//cout << "true_r_eb_e" << endl;
-		//cout << true_r_eb_e << endl;
-		//cout << "true_v_eb_e" << endl;
-		//cout << true_v_eb_e << endl;
-		//cout << "true_C_b_e" << endl;
-		//cout << true_C_b_e << endl;
-		//cout << "true_L_b" << endl;
-		//cout << true_L_b << endl;
-		//cout << "true_lambda_b" << endl;
-		//cout << true_lambda_b << endl;
-		//cout << "true_h_b" << endl;
-		//cout << true_h_b << endl;
-		//cout << "true_v_eb_n" << endl;
-		//cout << true_v_eb_n << endl;
-		//cout << "true_C_b_n" << endl;
-		//cout << true_C_b_n << endl;
-
-
-
 		double time = in_profile1(epoch - 1, 0);
 		Vector3d alpha_ib_b = in_profile1.row(epoch - 1).segment(1, 3).transpose();
-
+		//角速度增量真值
 		Vector3d v_ib_b = in_profile1.row(epoch - 1).segment(4, 3).transpose();
-
-		double tor_i = time - old_time;
+		//速度增量真值
+		
+		double tor_i = time - old_time;//计算时间间隔
+		
 		Vector3d meas_f_ib_b_old = v_ib_b / tor_i;
+		//平均加速度
 
 		Vector3d meas_omega_ib_b_old = alpha_ib_b / tor_i;
+		//平均角加速度
 
 		Vector3d meas_omega_ib_b(0.0, 0.0, 0.0);
 		Vector3d meas_f_ib_b(0.0, 0.0, 0.0);
 
 		Matrix<double, 6, 1> quant_residuals_new;
 		quant_residuals_new << 0, 0, 0, 0, 0, 0;
-		// Corrected the function call to use quant_residuals
-
-		//meas_f_ib_b, meas_omega_ib_b, quant_residuals_new
-
-		//cout << "IMU_errors.b_a" << endl;
-		//cout << IMU_errors.b_a << endl;
-		//cout << IMU_errors.b_g << endl;
-		//cout << IMU_errors.M_a << endl;
-		//cout << IMU_errors.M_g << endl;
-		//cout << IMU_errors.G_g << endl;
+		
 
 		IMU_model(tor_i, meas_f_ib_b_old, meas_omega_ib_b_old, IMU_errors, quant_residuals, meas_f_ib_b, meas_omega_ib_b, quant_residuals_new);
-		//cout << meas_f_ib_b << endl;
-		//cout << meas_omega_ib_b << endl;
-		//cout << quant_residuals_new << endl;
+	//仿真IMU输出，在真值的基础上加上随机误差，模拟现实场景下IMU输出
+
 		quant_residuals = quant_residuals_new;
-		meas_f_ib_b -= est_IMU_bias.segment(0, 3);
+		meas_f_ib_b -= est_IMU_bias.segment(0, 3);//进行零偏修正
 		meas_omega_ib_b -= est_IMU_bias.segment(3, 3);
 
 		Vector3d est_r_eb_e(0.0, 0.0, 0.0);
@@ -471,31 +416,29 @@ void Loosely_coupled_INS_GNSS(const MatrixXd& in_profile, int no_epochs, const M
 		double est_lambda_b = 0;
 		double est_h_b = 0;
 
+		//进行惯性导航，力学编排
 		Nav_equations_ECEF(tor_i, old_est_r_eb_e, old_est_v_eb_e, old_est_C_b_e, meas_f_ib_b, meas_omega_ib_b, est_r_eb_e, est_v_eb_e, est_C_b_e);
-		/*cout << est_r_eb_e << endl;
-		cout << est_v_eb_e << endl;
-		cout << est_C_b_e << endl;*/
+		
+
 		Vector3d est_v_eb_n(0.0, 0.0, 0.0);
 		Matrix3d est_C_b_n = Matrix3d::Identity();
+		
 		// Determine whether to update GNSS simulation and run Kalman filter
-		if ((time - time_last_GNSS) >= gnss_config.epoch_interval)
+		//IMU响应时间0.005s，GNSS响应时间为1s
+		//time为当前IMU历元，old time上一个历元time_last_GNSS=old time
+		if ((time - time_last_GNSS) >= gnss_config.epoch_interval)//GNSS响应间隔1s
 		{
 			GNSS_epoch++;
-			double tor_s = time - time_last_GNSS;
+			double tor_s = time - time_last_GNSS;//上一次GNSS数据进入与现在时间的间隔
 			time_last_GNSS = in_profile2(GNSS_epoch - 1, 0);
-
+			//更新GNSS数据加入的时间
 			if ((time_last_GNSS - time) > 0.5)
+				//如果加入的时间先于现在的时间超过0.5s，则不进入组合导航，很少满足
 			{
-				GNSS_epoch = GNSS_epoch - 1;
+				GNSS_epoch = GNSS_epoch - 1;//GNSS响应次数减去1
 				time_last_GNSS = time_last_GNSS - 1;
 				ECEF_to_NED(est_r_eb_e, est_v_eb_e, est_C_b_e, est_L_b, est_lambda_b, est_h_b, est_v_eb_n, est_C_b_n);
-				//cout << est_L_b << endl;
-				//cout << est_lambda_b << endl;
-				//cout << est_h_b << endl;
-				//cout << est_v_eb_n << endl;
-				//cout << est_C_b_n << endl;
-
-
+		
 				out_profile1(epoch - 1, 0) = time;
 				out_profile1(epoch - 1, 1) = est_L_b;
 				out_profile1(epoch - 1, 2) = est_lambda_b;
@@ -509,26 +452,16 @@ void Loosely_coupled_INS_GNSS(const MatrixXd& in_profile, int no_epochs, const M
 				old_est_C_b_e = est_C_b_e;
 			}
 
-			old_est_L_b = in_profile2(GNSS_epoch - 1, 1);
+			old_est_L_b = in_profile2(GNSS_epoch - 1, 1);//使用GNSS数据作为现在时刻导航结果
 			old_est_lambda_b = in_profile2(GNSS_epoch - 1, 2);
 			old_est_h_b = in_profile2(GNSS_epoch - 1, 3);
-			// 162
+			
 			double a, b, c;
 			a = b = c = 0;
 			Matrix3d A = Matrix3d::Zero();
 
-			/*cout << "est_r_eb_e" << endl;
-			cout << est_r_eb_e << endl;
-			cout << "est_v_eb_e" << endl;
-			cout << est_v_eb_e << endl;
-			cout << "est_C_b_e" << endl;
-			cout << est_C_b_e << endl;*/
-
 			ECEF_to_NED(est_r_eb_e, est_v_eb_e, est_C_b_e, a, b, c, est_v_eb_n, A);
-
-			//cout << "est_v_eb_n" << endl;
-			//cout << est_v_eb_n << endl;
-
+			//通过力学编排求得的est_r_eb_e, est_v_eb_e, est_C_b_e求得est_v_eb_n
 			old_est_v_eb_n = est_v_eb_n;
 
 			est_L_b = old_est_L_b;
@@ -537,61 +470,21 @@ void Loosely_coupled_INS_GNSS(const MatrixXd& in_profile, int no_epochs, const M
 			Vector3d GNSS_v_eb_e(0.0, 0.0, 0.0);
 			Matrix3d GNSS_C_b_e = Matrix3d::Zero();
 
-			//cout << "old_est_L_b" << endl;
-			//cout << old_est_L_b << endl;
-			//cout << "old_est_lambda_b" << endl;
-			//cout << old_est_lambda_b << endl;
-			//cout << "old_est_h_b" << endl;
-			//cout << old_est_h_b << endl;
-			//cout << "old_est_v_eb_n" << endl;
-			//cout << old_est_v_eb_n << endl;
-
 			NED_to_ECEF(GNSS_r_eb_e, GNSS_v_eb_e, GNSS_C_b_e, old_est_L_b, old_est_lambda_b, old_est_h_b, old_est_v_eb_n, Matrix3d::Zero());
-
+			//从n系转换为e系
 			Matrix<double, 15, 15> P_matrix_new = Matrix<double, 15, 15>::Zero();
-			// Run Integration Kalman filter
-			//cout << "GNSS_r_eb_e" << endl;
-			//cout << GNSS_r_eb_e << endl;
-			//cout << "GNSS_v_eb_e" << endl;
-			//cout << GNSS_v_eb_e << endl;
-			//cout << "tor_s" << endl;
-			//cout << tor_s << endl;
-			//cout << "est_C_b_e" << endl;
-			//cout << est_C_b_e << endl;
-			//cout << "est_v_eb_e" << endl;
-			//cout << est_v_eb_e << endl;
-			//cout << "est_r_eb_e" << endl;
-			//cout << est_r_eb_e << endl;
-			//cout << "est_IMU_bias" << endl;
-			//cout << est_IMU_bias << endl;
-			//cout << "P_matrix" << endl;
-			//cout << P_matrix << endl;
-			//cout << "meas_f_ib_b" << endl;
-			//cout << meas_f_ib_b << endl;
-			//cout << "est_L_b" << endl;
-			//cout << est_L_b << endl;
 
 			LC_KF_Epoch(GNSS_r_eb_e, GNSS_v_eb_e, tor_s, est_C_b_e, est_v_eb_e, est_r_eb_e, est_IMU_bias, P_matrix,
 				meas_f_ib_b, est_L_b, LC_KF_config, est_C_b_e, est_v_eb_e, est_r_eb_e, est_IMU_bias, P_matrix_new);
-			P_matrix = P_matrix_new;
+			P_matrix = P_matrix_new;//更新P矩阵
 
-			//cout << "est_C_b_e" << endl;
-			//cout << est_C_b_e << endl;
-			//cout << "est_v_eb_e" << endl;
-			//cout << est_v_eb_e << endl;
-			//cout << "est_r_eb_e" << endl;
-			//cout << est_r_eb_e << endl;
-			//cout << "est_IMU_bias" << endl;
-			//cout << est_IMU_bias << endl;
-			//cout << "P_matrix" << endl;
-			//cout << P_matrix << endl;
 
 			out_imu_bias_est.resize(GNSS_epoch, 7);
-			out_imu_bias_est(GNSS_epoch - 1, 0) = time;
+			out_imu_bias_est(GNSS_epoch - 1, 0) = time;//更新零偏
 			out_imu_bias_est.row(GNSS_epoch - 1).segment(1, 6) = est_IMU_bias.transpose();
 
 			out_clock.resize(GNSS_epoch, 3);
-			out_clock(GNSS_epoch - 1, 0) = time;
+			out_clock(GNSS_epoch - 1, 0) = time;//更新时间
 			out_clock.row(GNSS_epoch - 1).segment(1, 2) = est_clock;
 
 			out_kf_sd.resize(GNSS_epoch, 16);
@@ -600,16 +493,12 @@ void Loosely_coupled_INS_GNSS(const MatrixXd& in_profile, int no_epochs, const M
 			{
 				out_kf_sd(GNSS_epoch - 1, i) = sqrt(P_matrix(i - 1, i - 1));
 			}
-		}
+		}//更新卡尔曼滤波不确定度
 
 		// Convert navigation solution to NED
 		ECEF_to_NED(est_r_eb_e, est_v_eb_e, est_C_b_e, est_L_b, est_lambda_b, est_h_b, est_v_eb_n, est_C_b_n);
-		//cout << est_L_b << endl;
-		//cout << est_lambda_b << endl;
-		//cout << est_h_b << endl;
-		//cout << est_v_eb_n << endl;
-		//cout << est_C_b_n << endl;
-		// Generate output profile record
+	//将得到的e系中的数据转换为n系
+		// Generate output profile record 输出结果
 		out_profile1(epoch - 1, 0) = time;
 		out_profile1(epoch - 1, 1) = est_L_b;
 		out_profile1(epoch - 1, 2) = est_lambda_b;
@@ -633,12 +522,8 @@ void Loosely_coupled_INS_GNSS(const MatrixXd& in_profile, int no_epochs, const M
 		old_time = time;
 		old_est_r_eb_e = est_r_eb_e;
 		old_est_v_eb_e = est_v_eb_e;
-		old_est_C_b_e = est_C_b_e;
-		//cout << setprecision(15) << old_time << endl;
-		//cout << setprecision(15) << old_est_r_eb_e << endl;
-		//cout << setprecision(15) << old_est_v_eb_e << endl;
-		//cout << setprecision(15) << old_est_C_b_e << endl;
-		//cout << old_est_C_b_e << endl;
+		old_est_C_b_e = est_C_b_e;    //new转变为old开始下一个循环
+
 	}
 
 	// Complete progress bar
